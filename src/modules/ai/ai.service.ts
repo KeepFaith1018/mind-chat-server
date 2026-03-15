@@ -20,6 +20,7 @@ export class AiService {
    */
   createChatModel(options: ChatOptions = {}) {
     const apiKey = this.configService.get<string>('SILICONFLOW_API_KEY');
+    console.error(apiKey);
     if (!apiKey) {
       throw new BusinessException(
         ErrorCode.INTERNAL_ERROR,
@@ -30,7 +31,7 @@ export class AiService {
     return new ChatOpenAI({
       modelName: options.modelName || 'deepseek-ai/DeepSeek-V3',
       temperature: options.temperature ?? 0.7,
-      openAIApiKey: apiKey,
+      apiKey: apiKey,
       configuration: {
         baseURL: 'https://api.siliconflow.cn/v1',
       },

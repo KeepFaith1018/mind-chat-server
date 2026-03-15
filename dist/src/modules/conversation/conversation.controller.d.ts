@@ -7,21 +7,21 @@ export declare class ConversationController {
     constructor(conversationService: ConversationService);
     create(user: JwtUser, createConversationDto: CreateConversationDto): Promise<{
         id: string;
+        title: string;
+        isPinned: boolean;
+        modelId: string;
         createdAt: Date;
         updatedAt: Date;
         userId: string;
-        modelId: string;
-        title: string;
-        isPinned: boolean;
     }>;
     findAll(user: JwtUser, query: PaginationDto): Promise<{
         items: {
             id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            modelId: string;
             title: string;
             isPinned: boolean;
+            modelId: string;
+            createdAt: Date;
+            updatedAt: Date;
         }[];
         total: number;
         page: number;
@@ -32,9 +32,9 @@ export declare class ConversationController {
         messages: {
             id: string;
             createdAt: Date;
+            conversationId: string;
             role: string;
             content: string;
-            conversationId: string;
             reasoningContent: string | null;
             toolCalls: import("@prisma/client/runtime/client").JsonValue | null;
             tokens: number;
@@ -42,21 +42,21 @@ export declare class ConversationController {
         }[];
     } & {
         id: string;
+        title: string;
+        isPinned: boolean;
+        modelId: string;
         createdAt: Date;
         updatedAt: Date;
         userId: string;
-        modelId: string;
-        title: string;
-        isPinned: boolean;
     }>;
     update(user: JwtUser, id: string, updateConversationDto: UpdateConversationDto): Promise<{
         id: string;
+        title: string;
+        isPinned: boolean;
+        modelId: string;
         createdAt: Date;
         updatedAt: Date;
         userId: string;
-        modelId: string;
-        title: string;
-        isPinned: boolean;
     }>;
     remove(user: JwtUser, id: string): Promise<{
         success: boolean;

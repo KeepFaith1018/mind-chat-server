@@ -5,4 +5,5 @@ export declare class GithubOAuthProvider implements OAuthProvider {
     constructor(configService: ConfigService);
     getRedirectUrl(state: string): string;
     getUser(code: string): Promise<OAuthUser>;
+    private getErrorDetail;
 }

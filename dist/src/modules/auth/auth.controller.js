@@ -21,31 +21,31 @@ const currentUser_decorator_1 = require("../../common/decorators/currentUser.dec
 const businessException_1 = require("../../common/exception/businessException");
 const errorCodeMap_1 = require("../../common/utils/errorCodeMap");
 const oauth_service_1 = require("./oauth/oauth.service");
+const auth_decorator_1 = require("../../common/decorators/auth.decorator");
+const config_1 = require("@nestjs/config");
 let AuthController = class AuthController {
     authService;
     oauthService;
-    constructor(authService, oauthService) {
+    configService;
+    constructor(authService, oauthService, configService) {
         this.authService = authService;
         this.oauthService = oauthService;
+        this.configService = configService;
     }
-    oauthRedirect(provider, res) {
-        const { url, state } = this.oauthService.getRedirectUrl(provider);
-        res.cookie(`${provider}_oauth_state`, state, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 10 * 60 * 1000,
-        });
+    oauthRedirect(provider, res, redirect) {
+        const { url } = this.oauthService.getRedirectUrl(provider, redirect);
         res.redirect(url);
     }
-    async oauthCallback(provider, code, state, req, res) {
+    async oauthCallback(provider, code, state, res) {
         if (!['github', 'google'].includes(provider)) {
             throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.NOT_FOUND);
         }
-        const savedState = req.cookies[`${provider}_oauth_state`];
-        res.clearCookie(`${provider}_oauth_state`);
-        const data = await this.oauthService.login(provider, code, state, savedState);
+        const data = await this.oauthService.login(provider, code, state);
         this.setCookies(res, data.accessToken, data.refreshToken);
-        res.redirect('/');
+        const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+        const redirectUrl = data.redirectUrl || '/';
+        const finalUrl = this.toFrontendUrl(frontendUrl, redirectUrl);
+        res.redirect(finalUrl);
     }
     async register(dto, res) {
         const data = await this.authService.register(dto);
@@ -86,14 +86,23 @@ let AuthController = class AuthController {
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
     }
+    toFrontendUrl(frontendUrl, redirectPath) {
+        try {
+            return new URL(redirectPath, frontendUrl).toString();
+        }
+        catch {
+            return frontendUrl;
+        }
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
     (0, common_1.Get)('oauth/:provider'),
     __param(0, (0, common_1.Param)('provider')),
     __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Query)('redirect')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, Object, String]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "oauthRedirect", null);
 __decorate([
@@ -101,10 +110,9 @@ __decorate([
     __param(0, (0, common_1.Param)('provider')),
     __param(1, (0, common_1.Query)('code')),
     __param(2, (0, common_1.Query)('state')),
-    __param(3, (0, common_1.Req)()),
-    __param(4, (0, common_1.Res)()),
+    __param(3, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, Object, Object]),
+    __metadata("design:paramtypes", [String, String, String, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "oauthCallback", null);
 __decorate([
@@ -140,6 +148,7 @@ __decorate([
 ], AuthController.prototype, "refresh", null);
 __decorate([
     (0, common_1.Get)('me'),
+    (0, auth_decorator_1.Auth)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -149,6 +158,7 @@ __decorate([
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService,
-        oauth_service_1.OAuthService])
+        oauth_service_1.OAuthService,
+        config_1.ConfigService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

@@ -18,6 +18,7 @@ import { PaginationDto } from './dto/pagination.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/currentUser.decorator';
 import { JwtUser } from '@app/types/jwtUser.interface';
+import { Auth } from '@app/common/decorators/auth.decorator';
 
 @Controller('conversations')
 @UseGuards(AuthGuard)
@@ -25,6 +26,7 @@ export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
   @Post()
+  @Auth()
   create(
     @CurrentUser() user: JwtUser,
     @Body() createConversationDto: CreateConversationDto,
@@ -34,17 +36,18 @@ export class ConversationController {
       createConversationDto,
     );
   }
-
+  @Auth()
   @Get()
   findAll(@CurrentUser() user: JwtUser, @Query() query: PaginationDto) {
     return this.conversationService.findAll(user.sub.toString(), query);
   }
 
+  @Auth()
   @Get(':id')
   findOne(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.conversationService.findOne(user.sub.toString(), id);
   }
-
+  @Auth()
   @Patch(':id')
   update(
     @CurrentUser() user: JwtUser,
@@ -57,7 +60,7 @@ export class ConversationController {
       updateConversationDto,
     );
   }
-
+  @Auth()
   @Delete(':id')
   remove(@CurrentUser() user: JwtUser, @Param('id') id: string) {
     return this.conversationService.remove(user.sub.toString(), id);

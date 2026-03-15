@@ -15,6 +15,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { AiModule } from './modules/ai/ai.module';
 import { QuotaModule } from './modules/quota/quota.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { ModelsModule } from './modules/models/models.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { UploadModule } from './modules/upload/upload.module';
     AiModule,
     QuotaModule,
     UploadModule,
+    ModelsModule,
   ],
   controllers: [AppController],
   providers: [

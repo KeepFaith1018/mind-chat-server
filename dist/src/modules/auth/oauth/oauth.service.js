@@ -50,33 +50,35 @@ const businessException_1 = require("../../../common/exception/businessException
 const errorCodeMap_1 = require("../../../common/utils/errorCodeMap");
 const crypto = __importStar(require("crypto"));
 const auth_service_1 = require("../auth.service");
+const config_1 = require("@nestjs/config");
 let OAuthService = class OAuthService {
     githubProvider;
     googleProvider;
     authService;
+    configService;
     providers;
-    constructor(githubProvider, googleProvider, authService) {
+    stateMaxAgeMs = 10 * 60 * 1000;
+    constructor(githubProvider, googleProvider, authService, configService) {
         this.githubProvider = githubProvider;
         this.googleProvider = googleProvider;
         this.authService = authService;
+        this.configService = configService;
         this.providers = {
             github: githubProvider,
             google: googleProvider,
         };
     }
-    getRedirectUrl(providerName) {
+    getRedirectUrl(providerName, redirect) {
         const provider = this.getProvider(providerName);
-        const state = crypto.randomBytes(16).toString('hex');
+        const state = this.generateSignedState(providerName, redirect);
         const url = provider.getRedirectUrl(state);
         return { url, state };
     }
-    async login(providerName, code, state, savedState) {
-        if (!state || state !== savedState) {
-            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.PARAM_ERROR, '无效的状态码(state)');
-        }
+    async login(providerName, code, state) {
+        const redirectUrl = this.verifySignedState(state, providerName);
         const provider = this.getProvider(providerName);
         const oauthUser = await provider.getUser(code);
-        return this.authService.oauthLogin({
+        const authData = await this.authService.oauthLogin({
             email: oauthUser.email,
             provider: oauthUser.provider,
             providerId: oauthUser.providerId,
@@ -84,6 +86,10 @@ let OAuthService = class OAuthService {
             avatarUrl: oauthUser.avatarUrl,
             accessToken: oauthUser.accessToken,
         });
+        return {
+            ...authData,
+            redirectUrl,
+        };
     }
     getProvider(name) {
         const provider = this.providers[name];
@@ -92,12 +98,71 @@ let OAuthService = class OAuthService {
         }
         return provider;
     }
+    generateSignedState(providerName, redirect) {
+        const payload = {
+            provider: providerName,
+            ts: Date.now(),
+            nonce: crypto.randomBytes(16).toString('hex'),
+            redirect: this.normalizeRedirect(redirect),
+        };
+        const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+        const signature = crypto
+            .createHmac('sha256', this.getStateSecret())
+            .update(payloadEncoded)
+            .digest('base64url');
+        return `${payloadEncoded}.${signature}`;
+    }
+    verifySignedState(state, providerName) {
+        if (!state) {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.PARAM_ERROR, '无效的状态码(state)');
+        }
+        const [payloadEncoded, signature] = state.split('.');
+        if (!payloadEncoded || !signature) {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.PARAM_ERROR, '无效的状态码(state)');
+        }
+        const expectedSignature = crypto
+            .createHmac('sha256', this.getStateSecret())
+            .update(payloadEncoded)
+            .digest('base64url');
+        const provided = Buffer.from(signature);
+        const expected = Buffer.from(expectedSignature);
+        if (provided.length !== expected.length ||
+            !crypto.timingSafeEqual(provided, expected)) {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.PARAM_ERROR, '无效的状态码(state)');
+        }
+        let payload;
+        try {
+            payload = JSON.parse(Buffer.from(payloadEncoded, 'base64url').toString('utf8'));
+        }
+        catch {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.PARAM_ERROR, '无效的状态码(state)');
+        }
+        if (!payload.ts ||
+            Date.now() - payload.ts > this.stateMaxAgeMs ||
+            payload.provider !== providerName) {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.PARAM_ERROR, '无效的状态码(state)');
+        }
+        return this.normalizeRedirect(payload.redirect);
+    }
+    normalizeRedirect(redirect) {
+        if (!redirect || !redirect.startsWith('/')) {
+            return '/';
+        }
+        if (redirect.startsWith('//')) {
+            return '/';
+        }
+        return redirect;
+    }
+    getStateSecret() {
+        return (this.configService.get('JWT_SECRET') || 'default_state_secret');
+    }
 };
 exports.OAuthService = OAuthService;
 exports.OAuthService = OAuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [github_provider_1.GithubOAuthProvider,
         google_provider_1.GoogleOAuthProvider,
-        auth_service_1.AuthService])
+        auth_service_1.AuthService,
+        config_1.ConfigService])
 ], OAuthService);
 //# sourceMappingURL=oauth.service.js.map

@@ -14,6 +14,7 @@ import { CurrentUser } from '../../common/decorators/currentUser.decorator';
 import { JwtUser } from '@app/types/jwtUser.interface';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { Auth } from '@app/common/decorators/auth.decorator';
 
 @Controller('upload')
 @UseGuards(AuthGuard)
@@ -21,6 +22,7 @@ export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
   @Post()
+  @Auth()
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({

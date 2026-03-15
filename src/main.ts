@@ -33,7 +33,7 @@ async function bootstrap() {
     }),
   );
   // 全局前缀
-  app.setGlobalPrefix('api');
-  await app.listen(3000);
+  app.setGlobalPrefix('v1');
+  await app.listen(3001);
 }
 void bootstrap();

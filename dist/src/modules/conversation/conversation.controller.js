@@ -19,6 +19,7 @@ const conversation_dto_1 = require("./dto/conversation.dto");
 const pagination_dto_1 = require("./dto/pagination.dto");
 const auth_guard_1 = require("../../common/guards/auth.guard");
 const currentUser_decorator_1 = require("../../common/decorators/currentUser.decorator");
+const auth_decorator_1 = require("../../common/decorators/auth.decorator");
 let ConversationController = class ConversationController {
     conversationService;
     constructor(conversationService) {
@@ -43,6 +44,7 @@ let ConversationController = class ConversationController {
 exports.ConversationController = ConversationController;
 __decorate([
     (0, common_1.Post)(),
+    (0, auth_decorator_1.Auth)(),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -50,6 +52,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ConversationController.prototype, "create", null);
 __decorate([
+    (0, auth_decorator_1.Auth)(),
     (0, common_1.Get)(),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Query)()),
@@ -58,6 +61,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ConversationController.prototype, "findAll", null);
 __decorate([
+    (0, auth_decorator_1.Auth)(),
     (0, common_1.Get)(':id'),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id')),
@@ -66,6 +70,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ConversationController.prototype, "findOne", null);
 __decorate([
+    (0, auth_decorator_1.Auth)(),
     (0, common_1.Patch)(':id'),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id')),
@@ -75,6 +80,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ConversationController.prototype, "update", null);
 __decorate([
+    (0, auth_decorator_1.Auth)(),
     (0, common_1.Delete)(':id'),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id')),

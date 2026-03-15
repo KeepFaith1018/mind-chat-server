@@ -22,13 +22,14 @@ let AiService = class AiService {
     }
     createChatModel(options = {}) {
         const apiKey = this.configService.get('SILICONFLOW_API_KEY');
+        console.error(apiKey);
         if (!apiKey) {
             throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.INTERNAL_ERROR, 'SiliconFlow API Key missing');
         }
         return new openai_1.ChatOpenAI({
             modelName: options.modelName || 'deepseek-ai/DeepSeek-V3',
             temperature: options.temperature ?? 0.7,
-            openAIApiKey: apiKey,
+            apiKey: apiKey,
             configuration: {
                 baseURL: 'https://api.siliconflow.cn/v1',
             },

@@ -24,6 +24,7 @@ const chat_module_1 = require("./modules/chat/chat.module");
 const ai_module_1 = require("./modules/ai/ai.module");
 const quota_module_1 = require("./modules/quota/quota.module");
 const upload_module_1 = require("./modules/upload/upload.module");
+const models_module_1 = require("./modules/models/models.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -54,6 +55,7 @@ exports.AppModule = AppModule = __decorate([
             ai_module_1.AiModule,
             quota_module_1.QuotaModule,
             upload_module_1.UploadModule,
+            models_module_1.ModelsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

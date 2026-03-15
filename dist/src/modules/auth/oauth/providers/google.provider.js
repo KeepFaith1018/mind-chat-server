@@ -21,10 +21,11 @@ let GoogleOAuthProvider = class GoogleOAuthProvider {
     }
     getRedirectUrl(state) {
         const clientId = this.configService.get('GOOGLE_CLIENT_ID');
-        if (!clientId) {
-            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.INTERNAL_ERROR, 'Google Client ID 未配置');
+        const appUrl = this.configService.get('APP_URL');
+        if (!clientId || !appUrl) {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.INTERNAL_ERROR, 'Google OAuth 配置缺失');
         }
-        const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
+        const redirectUri = `${appUrl}/v1/auth/google/callback`;
         const params = new URLSearchParams({
             client_id: clientId,
             redirect_uri: redirectUri,
@@ -37,8 +38,12 @@ let GoogleOAuthProvider = class GoogleOAuthProvider {
     async getUser(code) {
         const clientId = this.configService.get('GOOGLE_CLIENT_ID');
         const clientSecret = this.configService.get('GOOGLE_CLIENT_SECRET');
-        const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
-        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        const appUrl = this.configService.get('APP_URL');
+        if (!clientId || !clientSecret || !appUrl) {
+            throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.INTERNAL_ERROR, 'Google OAuth 配置缺失');
+        }
+        const redirectUri = `${appUrl}/api/auth/google/callback`;
+        const tokenResponse = (await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -50,15 +55,15 @@ let GoogleOAuthProvider = class GoogleOAuthProvider {
                 grant_type: 'authorization_code',
                 redirect_uri: redirectUri,
             }),
-        }).then((r) => r.json());
+        }).then((r) => r.json()));
         if (tokenResponse.error || !tokenResponse.access_token) {
             throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.AUTH_INVALID_CREDENTIALS, 'Google 授权失败');
         }
-        const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        const userResponse = (await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
             headers: {
                 Authorization: `Bearer ${tokenResponse.access_token}`,
             },
-        }).then((r) => r.json());
+        }).then((r) => r.json()));
         if (!userResponse.email) {
             throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.AUTH_INVALID_CREDENTIALS, '未获取到 Google 邮箱');
         }

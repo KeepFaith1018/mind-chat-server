@@ -18,59 +18,46 @@ import { BusinessException } from '../../common/exception/businessException';
 import { ErrorCode } from '../../common/utils/errorCodeMap';
 import { JwtUser } from '@app/types/jwtUser.interface';
 import { OAuthService } from './oauth/oauth.service';
-
+import { Auth } from '@app/common/decorators/auth.decorator';
+import { ConfigService } from '@nestjs/config';
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly oauthService: OAuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   // 统一 OAuth 跳转接口: /auth/oauth/github, /auth/oauth/google
   @Get('oauth/:provider')
-  oauthRedirect(@Param('provider') provider: string, @Res() res: Response) {
-    const { url, state } = this.oauthService.getRedirectUrl(provider);
-
-    res.cookie(`${provider}_oauth_state`, state, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 10 * 60 * 1000, // 10m
-    });
-
+  oauthRedirect(
+    @Param('provider') provider: string,
+    @Res() res: Response,
+    @Query('redirect') redirect?: string,
+  ) {
+    const { url } = this.oauthService.getRedirectUrl(provider, redirect);
     res.redirect(url);
   }
 
-  // 统一 OAuth 回调接口: /auth/github/callback (保持兼容), 或 /auth/oauth/github/callback
-  // 为了兼容之前的路由，这里分别处理，或者使用通配符
   @Get(':provider/callback')
   async oauthCallback(
     @Param('provider') provider: string,
     @Query('code') code: string,
     @Query('state') state: string,
-    @Req() req: Request,
     @Res() res: Response,
   ) {
-    // 简单的路由过滤，只处理 github 和 google，避免与 me/login 等冲突
     if (!['github', 'google'].includes(provider)) {
-      // 如果不是 oauth provider，可能是其他接口误入（虽然 :provider 优先级低，但最好防范）
-      // 由于 AuthController 还有 register/login 等固定路由，NestJS 会优先匹配固定路由
       throw new BusinessException(ErrorCode.NOT_FOUND);
     }
 
-    const savedState = req.cookies[`${provider}_oauth_state`] as
-      | string
-      | undefined;
-    res.clearCookie(`${provider}_oauth_state`);
-
-    const data = await this.oauthService.login(
-      provider,
-      code,
-      state,
-      savedState,
-    );
+    const data = await this.oauthService.login(provider, code, state);
 
     this.setCookies(res, data.accessToken, data.refreshToken);
-    res.redirect('/');
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const redirectUrl = data.redirectUrl || '/';
+    const finalUrl = this.toFrontendUrl(frontendUrl, redirectUrl);
+    res.redirect(finalUrl);
   }
 
   @Post('register')
@@ -119,6 +106,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @Auth()
   @UseGuards(AuthGuard)
   async getProfile(@CurrentUser() user: JwtUser) {
     // 这里的 user 是 JWT payload，如果需要详细信息可以调 Service，或者直接返回
@@ -138,5 +126,13 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
     });
+  }
+
+  private toFrontendUrl(frontendUrl: string, redirectPath: string): string {
+    try {
+      return new URL(redirectPath, frontendUrl).toString();
+    } catch {
+      return frontendUrl;
+    }
   }
 }

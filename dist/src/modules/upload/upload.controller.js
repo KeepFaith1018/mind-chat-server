@@ -20,6 +20,7 @@ const auth_guard_1 = require("../../common/guards/auth.guard");
 const currentUser_decorator_1 = require("../../common/decorators/currentUser.decorator");
 const multer_1 = require("multer");
 const path_1 = require("path");
+const auth_decorator_1 = require("../../common/decorators/auth.decorator");
 let UploadController = class UploadController {
     uploadService;
     constructor(uploadService) {
@@ -32,6 +33,7 @@ let UploadController = class UploadController {
 exports.UploadController = UploadController;
 __decorate([
     (0, common_1.Post)(),
+    (0, auth_decorator_1.Auth)(),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
         storage: (0, multer_1.diskStorage)({
             destination: './uploads',

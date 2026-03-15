@@ -25,8 +25,8 @@ async function bootstrap() {
         transform: true,
         whitelist: true,
     }));
-    app.setGlobalPrefix('api');
-    await app.listen(3000);
+    app.setGlobalPrefix('v1');
+    await app.listen(3001);
 }
 void bootstrap();
 //# sourceMappingURL=main.js.map

@@ -22,39 +22,53 @@ let AllExceptionsFilter = class AllExceptionsFilter {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
         const request = ctx.getRequest();
+        const { method, url, ip, body, query } = request;
         if (exception instanceof businessException_1.BusinessException) {
             const res = exception.getResponse();
-            this.logger.warn(`[BusinessException] ${request.method} ${request.url} - ${JSON.stringify(res)}`);
-            response
+            this.logger.warn('BusinessException', {
+                method,
+                url,
+                ip,
+                code: res.code,
+                message: res.message,
+            });
+            return response
                 .status(exception.getStatus())
                 .json(result_1.Result.error(res.code, res.message));
-            return;
         }
         if (exception instanceof common_1.HttpException) {
             const status = exception.getStatus();
             const res = exception.getResponse();
             let message = exception.message;
-            if (typeof res === 'string') {
-                message = res;
-            }
-            else if (typeof res === 'object' && res !== null) {
+            if (typeof res === 'object' && res !== null) {
                 const msg = res.message;
-                if (Array.isArray(msg)) {
-                    message = msg.join(', ');
-                }
-                else if (typeof msg === 'string') {
-                    message = msg;
-                }
+                message = Array.isArray(msg) ? msg.join(', ') : msg;
             }
-            this.logger.error(`[HttpException] ${request.method} ${request.url} - ${status} - ${message}`);
-            response
+            this.logger.error('HttpException', {
+                method,
+                url,
+                ip,
+                status,
+                message,
+                body,
+                query,
+            });
+            return response
                 .status(status)
                 .json(result_1.Result.error(errorCodeMap_1.ErrorCode.PARAM_ERROR, message));
-            return;
         }
         const error = exception;
-        this.logger.error(`[UnknownException] ${request.method} ${request.url}`, error?.stack);
-        response
+        this.logger.error('UnknownException', {
+            method,
+            url,
+            ip,
+            name: error?.name,
+            message: error?.message,
+            stack: error?.stack,
+            body,
+            query,
+        });
+        return response
             .status(common_1.HttpStatus.INTERNAL_SERVER_ERROR)
             .json(result_1.Result.error(errorCodeMap_1.ErrorCode.INTERNAL_ERROR, '服务器内部错误'));
     }

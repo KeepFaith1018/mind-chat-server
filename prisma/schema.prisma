@@ -26,6 +26,7 @@ model User {
   conversations Conversation[]
   files         File[]
   quota         UsageQuota?
+  usageLogs     UsageLog[]
 
   @@map("users")
 }
@@ -67,11 +68,14 @@ model Conversation {
   title     String    @default("新对话")
   isPinned  Boolean   @default(false) @map("is_pinned")
   modelId   String    @map("model_id")
+  summary   String?   @db.Text
+  summaryUpdatedAt DateTime? @map("summary_updated_at") @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
+  usageLogs UsageLog[]
 
   @@index([userId])
   @@map("conversations")
@@ -105,4 +109,49 @@ model UsageQuota {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("usage_quotas")
+}
+
+model ModelConfig {
+  id                String   @id @default(uuid()) @db.Uuid
+  modelKey          String   @unique @map("model_key")
+  displayName       String   @map("display_name")
+  provider          String
+  enabled           Boolean  @default(true)
+  isDefault         Boolean  @default(false) @map("is_default")
+  maxContextTokens  Int      @default(64000) @map("max_context_tokens")
+  supportsWebSearch Boolean  @default(false) @map("supports_web_search")
+  supportsReasoning Boolean  @default(false) @map("supports_reasoning")
+  supportsFileQa    Boolean  @default(false) @map("supports_file_qa")
+  supportsStream    Boolean  @default(true) @map("supports_stream")
+  inputPricePer1k   Decimal  @default(0) @map("input_price_per_1k") @db.Decimal(12, 6)
+  outputPricePer1k  Decimal  @default(0) @map("output_price_per_1k") @db.Decimal(12, 6)
+  configJson        Json?    @map("config_json")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([enabled, isDefault])
+  @@map("model_configs")
+}
+
+model UsageLog {
+  id               String        @id @default(uuid()) @db.Uuid
+  userId           String        @map("user_id") @db.Uuid
+  conversationId   String?       @map("conversation_id") @db.Uuid
+  modelKey         String        @map("model_key")
+  promptTokens     Int           @default(0) @map("prompt_tokens")
+  completionTokens Int           @default(0) @map("completion_tokens")
+  reasoningTokens  Int?          @map("reasoning_tokens")
+  totalTokens      Int           @default(0) @map("total_tokens")
+  cost             Decimal       @default(0) @db.Decimal(12, 6)
+  currency         String        @default("USD")
+  metaJson         Json?         @map("meta_json")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([modelKey, createdAt])
+  @@map("usage_logs")
 }

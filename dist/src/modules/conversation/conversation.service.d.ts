@@ -31,9 +31,9 @@ export declare class ConversationService {
         messages: {
             id: string;
             createdAt: Date;
+            conversationId: string;
             role: string;
             content: string;
-            conversationId: string;
             reasoningContent: string | null;
             toolCalls: import("@prisma/client/runtime/client").JsonValue | null;
             tokens: number;

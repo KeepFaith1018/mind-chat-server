@@ -5,6 +5,7 @@ import { ChatDto } from './dto/chat.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/currentUser.decorator';
 import { JwtUser } from '@app/types/jwtUser.interface';
+import { Auth } from '@app/common/decorators/auth.decorator';
 
 @Controller('chat')
 @UseGuards(AuthGuard)
@@ -12,6 +13,7 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Post()
+  @Auth()
   async chat(
     @CurrentUser() user: JwtUser,
     @Body() dto: ChatDto,

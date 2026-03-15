@@ -18,6 +18,7 @@ const chat_service_1 = require("./chat.service");
 const chat_dto_1 = require("./dto/chat.dto");
 const auth_guard_1 = require("../../common/guards/auth.guard");
 const currentUser_decorator_1 = require("../../common/decorators/currentUser.decorator");
+const auth_decorator_1 = require("../../common/decorators/auth.decorator");
 let ChatController = class ChatController {
     chatService;
     constructor(chatService) {
@@ -30,6 +31,7 @@ let ChatController = class ChatController {
 exports.ChatController = ChatController;
 __decorate([
     (0, common_1.Post)(),
+    (0, auth_decorator_1.Auth)(),
     __param(0, (0, currentUser_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.Res)()),
