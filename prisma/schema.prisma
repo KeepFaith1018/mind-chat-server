@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique
+  passwordHash  String?   @map("password_hash")
+  name          String?
+  avatarUrl     String?   @map("avatar_url")
+  status        Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  accounts      Account[]
+  conversations Conversation[]
+  files         File[]
+  quota         UsageQuota?
+
+  @@map("users")
+}
+
+model File {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  filename  String
+  mimeType  String   @map("mime_type")
+  size      Int
+  path      String   // 存储路径 (本地或对象存储Key)
+  content   String?  @db.Text // 提取的纯文本内容 (缓存)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("files")
+}
+
+model Account {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  provider     String
+  providerId   String    @map("provider_id")
+  accessToken  String?   @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("accounts")
+}
+
+model Conversation {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  title     String    @default("新对话")
+  isPinned  Boolean   @default(false) @map("is_pinned")
+  modelId   String    @map("model_id")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id               String   @id @default(uuid()) @db.Uuid
+  conversationId   String   @map("conversation_id") @db.Uuid
+  role             String
+  content          String
+  reasoningContent String?  @map("reasoning_content")
+  toolCalls        Json?    @map("tool_calls")
+  tokens           Int      @default(0)
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+model UsageQuota {
+  userId           String    @id @map("user_id") @db.Uuid
+  dailyTokenLimit  Int       @default(500000) @map("daily_token_limit")
+  dailyTokenUsage  Int       @default(0) @map("daily_token_usage")
+  lastRequestAt    DateTime? @map("last_request_at") @db.Timestamptz(3)
+  totalTokenUsage  BigInt    @default(0) @map("total_token_usage")
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("usage_quotas")
+}

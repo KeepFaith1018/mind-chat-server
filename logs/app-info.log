@@ -1,0 +1,63 @@
+{"context":"RoutesResolver","level":"info","message":"AppController {/api}:","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api, GET} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RoutesResolver","level":"info","message":"AuthController {/api/auth}:","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/oauth/:provider, GET} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/:provider/callback, GET} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/register, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/login, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/logout, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/refresh, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/me, GET} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RoutesResolver","level":"info","message":"ConversationController {/api/conversations}:","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations, GET} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, GET} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, PATCH} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, DELETE} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RoutesResolver","level":"info","message":"ChatController {/api/chat}:","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/chat, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"RoutesResolver","level":"info","message":"UploadController {/api/upload}:","timestamp":"2026-03-15 13:20:29"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/upload, POST} route","timestamp":"2026-03-15 13:20:29"}
+{"context":"NestApplication","level":"info","message":"Nest application successfully started","timestamp":"2026-03-15 13:20:29"}
+{"context":"RoutesResolver","level":"info","message":"AppController {/api}:","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api, GET} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RoutesResolver","level":"info","message":"AuthController {/api/auth}:","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/oauth/:provider, GET} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/:provider/callback, GET} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/register, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/login, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/logout, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/refresh, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/me, GET} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RoutesResolver","level":"info","message":"ConversationController {/api/conversations}:","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations, GET} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, GET} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, PATCH} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, DELETE} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RoutesResolver","level":"info","message":"ChatController {/api/chat}:","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/chat, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"RoutesResolver","level":"info","message":"UploadController {/api/upload}:","timestamp":"2026-03-15 13:21:13"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/upload, POST} route","timestamp":"2026-03-15 13:21:13"}
+{"context":"NestApplication","level":"info","message":"Nest application successfully started","timestamp":"2026-03-15 13:21:13"}
+{"context":"RoutesResolver","level":"info","message":"AppController {/api}:","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api, GET} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RoutesResolver","level":"info","message":"AuthController {/api/auth}:","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/oauth/:provider, GET} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/:provider/callback, GET} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/register, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/login, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/logout, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/refresh, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/auth/me, GET} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RoutesResolver","level":"info","message":"ConversationController {/api/conversations}:","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations, GET} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, GET} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, PATCH} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/conversations/:id, DELETE} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RoutesResolver","level":"info","message":"ChatController {/api/chat}:","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/chat, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"RoutesResolver","level":"info","message":"UploadController {/api/upload}:","timestamp":"2026-03-15 13:21:22"}
+{"context":"RouterExplorer","level":"info","message":"Mapped {/api/upload, POST} route","timestamp":"2026-03-15 13:21:22"}
+{"context":"NestApplication","level":"info","message":"Nest application successfully started","timestamp":"2026-03-15 13:21:22"}
