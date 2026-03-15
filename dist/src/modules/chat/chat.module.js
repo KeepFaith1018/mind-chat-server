@@ -14,12 +14,13 @@ const config_1 = require("@nestjs/config");
 const ai_module_1 = require("../ai/ai.module");
 const quota_module_1 = require("../quota/quota.module");
 const prompt_service_1 = require("./services/prompt.service");
+const models_module_1 = require("../models/models.module");
 let ChatModule = class ChatModule {
 };
 exports.ChatModule = ChatModule;
 exports.ChatModule = ChatModule = __decorate([
     (0, common_1.Module)({
-        imports: [config_1.ConfigModule, ai_module_1.AiModule, quota_module_1.QuotaModule],
+        imports: [config_1.ConfigModule, ai_module_1.AiModule, quota_module_1.QuotaModule, models_module_1.ModelsModule],
         controllers: [chat_controller_1.ChatController],
         providers: [chat_service_1.ChatService, prompt_service_1.PromptService],
     })

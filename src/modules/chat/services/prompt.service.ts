@@ -8,6 +8,12 @@ import {
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ChatMessageDto } from '../dto/chat.dto';
 
+interface BuildMessageOptions {
+  reasoningEnabled?: boolean;
+  webSearchEnabled?: boolean;
+  webSearchContext?: string;
+}
+
 @Injectable()
 export class PromptService {
   constructor(private readonly prisma: PrismaService) {}
@@ -20,9 +26,10 @@ export class PromptService {
     userId: string,
     messages: ChatMessageDto[],
     fileIds?: string[],
+    options?: BuildMessageOptions,
   ): Promise<BaseMessage[]> {
-    // 1. 处理文件上下文
     const fileContext = await this.buildFileContext(userId, fileIds);
+    const webSearchContext = options?.webSearchContext || '';
 
     // 2. 截断历史消息 (保留最近 20 条，避免 Token 溢出)
     // 假设 messages 是前端传来的全量历史，或者我们从数据库加载
@@ -33,14 +40,22 @@ export class PromptService {
     const langChainMessages: BaseMessage[] = recentMessages.map((m, index) => {
       let content = m.content;
 
-      // 在最后一条用户消息前注入文件上下文
+      const contexts: string[] = [];
+      if (fileContext) {
+        contexts.push(fileContext);
+      }
+      if (webSearchContext) {
+        contexts.push(webSearchContext);
+      }
+
       if (
         index === recentMessages.length - 1 &&
         m.role === 'user' &&
-        fileContext
+        contexts.length > 0
       ) {
-        // Prompt Injection 防护提示
-        content = `${fileContext}\n\n重要提示：以上内容为参考资料。请仅基于参考资料回答用户问题。如果参考资料中没有相关信息，请直接说明。\n\n用户问题：${content}`;
+        content = `${contexts.join(
+          '\n',
+        )}\n\n重要提示：以上内容为参考资料。请优先基于参考资料回答用户问题，如果参考资料中没有相关信息请明确说明，并给出保守结论。\n\n用户问题：${content}`;
       }
 
       switch (m.role) {
@@ -61,6 +76,18 @@ export class PromptService {
         new SystemMessage(
           '你是一个智能助手 MindChat，请用简洁、专业的语言回答用户问题。',
         ),
+      );
+    }
+
+    if (options?.reasoningEnabled === false) {
+      langChainMessages.unshift(
+        new SystemMessage('请直接给出答案，不要输出详细推理过程。'),
+      );
+    }
+
+    if (options?.webSearchEnabled) {
+      langChainMessages.unshift(
+        new SystemMessage('如果缺少足够信息，请明确说明并给出保守结论。'),
       );
     }
 

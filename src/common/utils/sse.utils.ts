@@ -32,7 +32,16 @@ export class SSEUtils {
     this.res.write(`event: ${event}\ndata: ${payload}\n\n`);
   }
 
-  sendMeta(data: { conversationId: string }) {
+  sendMeta(data: {
+    conversationId: string;
+    model?: string;
+    capabilities?: {
+      webSearch: boolean;
+      reasoning: boolean;
+      fileQa: boolean;
+      stream: boolean;
+    };
+  }) {
     this.send('meta', data);
   }
 

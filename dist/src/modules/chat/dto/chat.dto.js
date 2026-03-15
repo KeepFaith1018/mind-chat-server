@@ -9,8 +9,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChatDto = exports.ChatMessageDto = void 0;
+exports.ChatDto = exports.ChatCapabilitiesDto = exports.ChatMessageDto = void 0;
 const class_validator_1 = require("class-validator");
+const class_transformer_1 = require("class-transformer");
 class ChatMessageDto {
     role;
     content;
@@ -26,11 +27,33 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], ChatMessageDto.prototype, "content", void 0);
+class ChatCapabilitiesDto {
+    webSearch;
+    reasoning;
+    fileQa;
+}
+exports.ChatCapabilitiesDto = ChatCapabilitiesDto;
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], ChatCapabilitiesDto.prototype, "webSearch", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], ChatCapabilitiesDto.prototype, "reasoning", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], ChatCapabilitiesDto.prototype, "fileQa", void 0);
 class ChatDto {
     messages;
     model;
     conversationId;
     fileIds;
+    capabilities;
 }
 exports.ChatDto = ChatDto;
 __decorate([
@@ -53,4 +76,10 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Array)
 ], ChatDto.prototype, "fileIds", void 0);
+__decorate([
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => ChatCapabilitiesDto),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", ChatCapabilitiesDto)
+], ChatDto.prototype, "capabilities", void 0);
 //# sourceMappingURL=chat.dto.js.map

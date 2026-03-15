@@ -18,7 +18,7 @@ let PromptService = class PromptService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async buildMessages(userId, messages, fileIds) {
+    async buildMessages(userId, messages, fileIds, options) {
         const fileContext = await this.buildFileContext(userId, fileIds);
         const maxHistory = 20;
         const recentMessages = messages.slice(-maxHistory);
@@ -42,6 +42,12 @@ let PromptService = class PromptService {
         });
         if (!(langChainMessages[0] instanceof messages_1.SystemMessage)) {
             langChainMessages.unshift(new messages_1.SystemMessage('你是一个智能助手 MindChat，请用简洁、专业的语言回答用户问题。'));
+        }
+        if (options?.reasoningEnabled === false) {
+            langChainMessages.unshift(new messages_1.SystemMessage('请直接给出答案，不要输出详细推理过程。'));
+        }
+        if (options?.webSearchEnabled) {
+            langChainMessages.unshift(new messages_1.SystemMessage('如果缺少足够信息，请明确说明并给出保守结论。'));
         }
         return langChainMessages;
     }

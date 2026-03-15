@@ -21,19 +21,24 @@ let AiService = class AiService {
         this.configService = configService;
     }
     createChatModel(options = {}) {
-        const apiKey = this.configService.get('SILICONFLOW_API_KEY');
-        console.error(apiKey);
+        const apiKey = this.configService.get('SILICONFLOW_API_KEY')?.trim();
         if (!apiKey) {
             throw new businessException_1.BusinessException(errorCodeMap_1.ErrorCode.INTERNAL_ERROR, 'SiliconFlow API Key missing');
+        }
+        const modelKwargs = {};
+        if (typeof options.reasoningEnabled === 'boolean') {
+            const reasoningKey = options.reasoningParamKey || 'enable_thinking';
+            modelKwargs[reasoningKey] = options.reasoningEnabled;
         }
         return new openai_1.ChatOpenAI({
             modelName: options.modelName || 'deepseek-ai/DeepSeek-V3',
             temperature: options.temperature ?? 0.7,
-            apiKey: apiKey,
+            apiKey,
             configuration: {
                 baseURL: 'https://api.siliconflow.cn/v1',
             },
             streaming: options.streaming ?? true,
+            ...(Object.keys(modelKwargs).length > 0 ? { modelKwargs } : {}),
         });
     }
     async streamChat(messages, options = {}) {

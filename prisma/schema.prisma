@@ -76,9 +76,24 @@ model Conversation {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
   usageLogs UsageLog[]
+  shareLinks ShareableLink[]
 
   @@index([userId])
   @@map("conversations")
+}
+
+model ShareableLink {
+  id             String       @id @db.VarChar(32)
+  conversationId String       @map("conversation_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz(3)
+  isActive       Boolean      @default(true) @map("is_active")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([isActive, expiresAt])
+  @@map("shareable_links")
 }
 
 model Message {

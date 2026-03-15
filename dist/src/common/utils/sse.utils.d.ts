@@ -7,6 +7,13 @@ export declare class SSEUtils {
     send(event: SSEEventType, data: any): void;
     sendMeta(data: {
         conversationId: string;
+        model?: string;
+        capabilities?: {
+            webSearch: boolean;
+            reasoning: boolean;
+            fileQa: boolean;
+            stream: boolean;
+        };
     }): void;
     sendThinking(delta: string): void;
     sendContent(delta: string): void;

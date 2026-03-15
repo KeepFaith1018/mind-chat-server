@@ -5,6 +5,8 @@ export interface ChatOptions {
     modelName?: string;
     temperature?: number;
     streaming?: boolean;
+    reasoningEnabled?: boolean;
+    reasoningParamKey?: string;
 }
 export declare class AiService {
     private readonly configService;

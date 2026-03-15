@@ -16,6 +16,8 @@ import { AiModule } from './modules/ai/ai.module';
 import { QuotaModule } from './modules/quota/quota.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ModelsModule } from './modules/models/models.module';
+import { SearchModule } from './modules/search/search.module';
+import { ShareModule } from './modules/share/share.module';
 
 @Module({
   imports: [
@@ -44,6 +46,8 @@ import { ModelsModule } from './modules/models/models.module';
     QuotaModule,
     UploadModule,
     ModelsModule,
+    SearchModule,
+    ShareModule,
   ],
   controllers: [AppController],
   providers: [

@@ -8,6 +8,35 @@ import { AiService } from '../ai/ai.service';
 import { QuotaService } from '../quota/quota.service';
 import { PromptService } from './services/prompt.service';
 import { SSEUtils } from '../../common/utils/sse.utils';
+import { ModelsService } from '../models/models.service';
+import { ModelCapabilityRequest } from '../models/models.service';
+import { SearchService, WebSearchItem } from '../search/search.service';
+import { UsageService } from '../usage/usage.service';
+import { SafetyService } from '../safety/safety.service';
+
+export interface ChatCapabilityPreviewResponse {
+  model: {
+    key: string;
+    displayName: string;
+    provider: string;
+    maxContextTokens: number;
+  };
+  requested: {
+    webSearch: boolean;
+    reasoning: boolean;
+    fileQa: boolean;
+  };
+  effective: {
+    webSearch: boolean;
+    reasoning: boolean;
+    fileQa: boolean;
+    stream: boolean;
+  };
+  context: {
+    conversationId: string | null;
+    hasFiles: boolean;
+  };
+}
 
 @Injectable()
 export class ChatService {
@@ -16,6 +45,10 @@ export class ChatService {
     private readonly aiService: AiService,
     private readonly quotaService: QuotaService,
     private readonly promptService: PromptService,
+    private readonly modelsService: ModelsService,
+    private readonly searchService: SearchService,
+    private readonly usageService: UsageService,
+    private readonly safetyService: SafetyService,
   ) {}
 
   /**
@@ -25,82 +58,205 @@ export class ChatService {
     const sse = new SSEUtils(res);
 
     try {
-      // 1. 检查配额
+      this.safetyService.assertSafeInput(dto.messages);
+
       await this.quotaService.checkQuota(userId);
 
-      // 2. 准备会话 ID (原子操作优化)
-      const conversationId = await this.getOrCreateConversation(userId, dto);
-      sse.sendMeta({ conversationId });
+      const conversation = await this.getOrCreateConversation(userId, dto);
+      const selectedModel = await this.modelsService.resolveModelForChat(
+        dto.model || conversation.modelId,
+      );
+      const hasFiles = Boolean(dto.fileIds?.length);
+      const requestedCapabilities = this.normalizeCapabilities(
+        dto.capabilities,
+      );
+      const effectiveCapabilities = this.modelsService.resolveCapabilities(
+        selectedModel,
+        requestedCapabilities,
+        hasFiles,
+      );
 
-      // 3. 异步持久化用户消息 (不阻塞流)
-      this.saveUserMessage(conversationId, dto).catch((err) =>
+      if (!effectiveCapabilities.stream) {
+        throw new BusinessException(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          `模型 ${selectedModel.displayName} 不支持流式对话`,
+        );
+      }
+
+      if (hasFiles && !effectiveCapabilities.fileQa) {
+        throw new BusinessException(
+          ErrorCode.PARAM_ERROR,
+          `模型 ${selectedModel.displayName} 不支持文件问答`,
+        );
+      }
+
+      if (requestedCapabilities.webSearch && !effectiveCapabilities.webSearch) {
+        throw new BusinessException(
+          ErrorCode.PARAM_ERROR,
+          `模型 ${selectedModel.displayName} 不支持联网搜索`,
+        );
+      }
+
+      await this.syncConversationModel(conversation.id, selectedModel.modelKey);
+
+      let webSearchResults: WebSearchItem[] = [];
+      let searchQuery = '';
+      if (effectiveCapabilities.webSearch) {
+        searchQuery = this.getLatestUserQuestion(dto.messages);
+        if (searchQuery) {
+          webSearchResults = await this.searchService.search(searchQuery);
+        }
+      }
+
+      sse.sendMeta({
+        conversationId: conversation.id,
+        model: selectedModel.modelKey,
+        capabilities: effectiveCapabilities,
+      });
+      if (effectiveCapabilities.webSearch) {
+        sse.send(
+          'tool_result',
+          this.buildWebSearchToolResultEvent(searchQuery, webSearchResults),
+        );
+      }
+
+      this.saveUserMessage(conversation.id, dto).catch((err) =>
         console.error('Save User Message Error:', err),
       );
 
-      // 4. 构建 Prompt (包含文件上下文、历史截断、防护)
       const langChainMessages = await this.promptService.buildMessages(
         userId,
         dto.messages,
         dto.fileIds,
+        {
+          reasoningEnabled: effectiveCapabilities.reasoning,
+          webSearchEnabled: effectiveCapabilities.webSearch,
+          webSearchContext: this.searchService.buildContext(webSearchResults),
+        },
       );
 
-      // 5. 调用 AI 模块获取流
-      const modelId = dto.model || 'deepseek-ai/DeepSeek-V3';
-
-      // 设置超时 (防止连接死锁)
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 60000); // 60s 首字超时
+      const timeoutId = setTimeout(() => abortController.abort(), 60000);
+
+      const reasoningParamKey =
+        typeof selectedModel.configJson?.reasoningParamKey === 'string'
+          ? selectedModel.configJson.reasoningParamKey
+          : undefined;
 
       const stream = await this.aiService.streamChat(langChainMessages, {
-        modelName: modelId,
-        // signal: abortController.signal, // 需要 AiService 支持透传 signal
+        modelName: selectedModel.modelKey,
+        reasoningEnabled: effectiveCapabilities.reasoning,
+        reasoningParamKey,
       });
 
       clearTimeout(timeoutId);
 
-      // 6. 处理流式响应
       let fullContent = '';
       let fullReasoning = '';
       let outputTokens = 0;
+      let providerUsagePayload: unknown;
+      let outputBlocked = false;
 
       for await (const chunk of stream) {
-        // 估算 Output Token
-        outputTokens += 1; // 简单估算，LangChain chunk 通常是 token 粒度
-
-        // 提取思考过程 (DeepSeek R1)
+        outputTokens += 1;
+        providerUsagePayload =
+          (chunk.response_metadata as unknown) ??
+          (chunk.additional_kwargs as unknown) ??
+          providerUsagePayload;
         const reasoning =
           (chunk.additional_kwargs?.reasoning_content as string) ||
           (chunk.response_metadata?.reasoning_content as string);
 
-        if (reasoning) {
+        if (reasoning && effectiveCapabilities.reasoning) {
           fullReasoning += reasoning;
           sse.sendThinking(reasoning);
         }
 
-        // 提取普通回复
         if (chunk.content) {
           const contentStr = chunk.content as string;
-          fullContent += contentStr;
-          sse.sendContent(contentStr);
+          const filtered = this.safetyService.filterOutputChunk(contentStr);
+          fullContent += filtered.safeText;
+          sse.sendContent(filtered.safeText);
+          if (filtered.blocked) {
+            outputBlocked = true;
+            break;
+          }
         }
       }
 
-      // 7. 结束流
       sse.sendDone();
 
-      // 8. 异步后置处理 (持久化 AI 回复 & 扣费)
       this.handlePostChat(
         userId,
-        conversationId,
+        conversation.id,
         fullContent,
         fullReasoning,
         langChainMessages,
         outputTokens,
+        selectedModel.modelKey,
+        providerUsagePayload,
       ).catch((err) => console.error('Post Chat Error:', err));
+
+      if (outputBlocked) {
+        console.warn('Output blocked by safety policy', {
+          conversationId: conversation.id,
+        });
+      }
     } catch (error) {
       console.error('Chat Error:', error);
-      sse.sendError(error.message || 'Unknown error');
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Unknown error';
+      sse.sendError(message);
     }
+  }
+
+  async getCapabilities(
+    userId: string,
+    query: {
+      model?: string;
+      conversationId?: string;
+      webSearch?: string;
+      reasoning?: string;
+      fileQa?: string;
+      fileCount?: string;
+    },
+  ): Promise<ChatCapabilityPreviewResponse> {
+    const conversationModel = await this.resolveConversationModel(
+      userId,
+      query.conversationId,
+    );
+    const selectedModel = await this.modelsService.resolveModelForChat(
+      query.model || conversationModel,
+    );
+
+    const requested = {
+      webSearch: this.parseBoolean(query.webSearch),
+      reasoning: this.parseBoolean(query.reasoning),
+      fileQa: this.parseBoolean(query.fileQa),
+    };
+    const hasFiles = this.parseNumber(query.fileCount) > 0;
+    const effective = this.modelsService.resolveCapabilities(
+      selectedModel,
+      requested,
+      hasFiles,
+    );
+
+    return {
+      model: {
+        key: selectedModel.modelKey,
+        displayName: selectedModel.displayName,
+        provider: selectedModel.provider,
+        maxContextTokens: selectedModel.maxContextTokens,
+      },
+      requested,
+      effective,
+      context: {
+        conversationId: query.conversationId || null,
+        hasFiles,
+      },
+    };
   }
 
   /**
@@ -114,7 +270,7 @@ export class ChatService {
       if (!conversation) {
         throw new BusinessException(ErrorCode.CONVERSATION_NOT_FOUND);
       }
-      return conversation.id;
+      return conversation;
     }
 
     const title =
@@ -126,7 +282,101 @@ export class ChatService {
         modelId: dto.model || 'deepseek-ai/DeepSeek-V3',
       },
     });
-    return conversation.id;
+    return conversation;
+  }
+
+  private async syncConversationModel(conversationId: string, modelId: string) {
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { modelId },
+    });
+  }
+
+  private normalizeCapabilities(
+    capabilities: ChatDto['capabilities'],
+  ): ModelCapabilityRequest {
+    return {
+      webSearch: Boolean(capabilities?.webSearch),
+      reasoning: Boolean(capabilities?.reasoning),
+      fileQa: Boolean(capabilities?.fileQa),
+    };
+  }
+
+  private getLatestUserQuestion(messages: ChatDto['messages']): string {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === 'user' && messages[i]?.content?.trim()) {
+        return messages[i].content.trim();
+      }
+    }
+    return '';
+  }
+
+  private async resolveConversationModel(
+    userId: string,
+    conversationId?: string,
+  ): Promise<string | undefined> {
+    if (!conversationId) {
+      return undefined;
+    }
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId, userId },
+      select: { modelId: true },
+    });
+    if (!conversation) {
+      throw new BusinessException(ErrorCode.CONVERSATION_NOT_FOUND);
+    }
+    return conversation.modelId;
+  }
+
+  private parseBoolean(value?: string): boolean {
+    if (!value) {
+      return false;
+    }
+    return value === 'true' || value === '1';
+  }
+
+  private parseNumber(value?: string): number {
+    if (!value) {
+      return 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private buildWebSearchToolResultEvent(
+    query: string,
+    items: WebSearchItem[],
+  ): {
+    version: 'v1';
+    tool: 'web_search';
+    query: string;
+    total: number;
+    truncated: boolean;
+    generatedAt: string;
+    items: Array<{
+      rank: number;
+      title: string;
+      url: string;
+      snippet: string;
+    }>;
+  } {
+    const maxItems = 5;
+    const normalizedItems = items.slice(0, maxItems).map((item, index) => ({
+      rank: index + 1,
+      title: item.title,
+      url: item.url,
+      snippet: item.snippet.slice(0, 240),
+    }));
+
+    return {
+      version: 'v1',
+      tool: 'web_search',
+      query,
+      total: normalizedItems.length,
+      truncated: items.length > maxItems,
+      generatedAt: new Date().toISOString(),
+      items: normalizedItems,
+    };
   }
 
   /**
@@ -155,6 +405,8 @@ export class ChatService {
     reasoning: string,
     inputMessages: any[],
     outputTokens: number,
+    modelKey: string,
+    providerUsagePayload?: unknown,
   ) {
     if (!content && !reasoning) return;
 
@@ -169,12 +421,29 @@ export class ChatService {
       },
     });
 
-    // 2. 扣费 (简易计算 Input Token)
-    // 假设平均 1 token = 4 chars
-    const inputChars = JSON.stringify(inputMessages).length;
-    const inputTokens = Math.ceil(inputChars / 4);
-    const totalTokens = inputTokens + outputTokens;
+    const usage = await this.usageService.computeUsage({
+      userId,
+      conversationId,
+      modelKey,
+      inputMessages,
+      outputTokensEstimate: outputTokens,
+      reasoningContent: reasoning,
+      providerUsagePayload,
+    });
 
-    await this.quotaService.recordUsage(userId, totalTokens);
+    await this.usageService.persistUsage(
+      {
+        userId,
+        conversationId,
+        modelKey,
+        inputMessages,
+        outputTokensEstimate: outputTokens,
+        reasoningContent: reasoning,
+        providerUsagePayload,
+      },
+      usage,
+    );
+
+    await this.quotaService.recordUsage(userId, usage.totalTokens);
   }
 }
