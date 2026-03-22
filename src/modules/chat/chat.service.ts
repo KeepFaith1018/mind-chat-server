@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ChatDto } from './dto/chat.dto';
 import { BusinessException } from '../../common/exception/businessException';
@@ -10,9 +10,15 @@ import { PromptService } from './services/prompt.service';
 import { SSEUtils } from '../../common/utils/sse.utils';
 import { ModelsService } from '../models/models.service';
 import { ModelCapabilityRequest } from '../models/models.service';
-import { SearchService, WebSearchItem } from '../search/search.service';
+import {
+  SearchService,
+  WebSearchItem,
+  WebSearchTrace,
+} from '../search/search.service';
 import { UsageService } from '../usage/usage.service';
 import { SafetyService } from '../safety/safety.service';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
 
 export interface ChatCapabilityPreviewResponse {
   model: {
@@ -41,6 +47,8 @@ export interface ChatCapabilityPreviewResponse {
 @Injectable()
 export class ChatService {
   constructor(
+    @Inject(WINSTON_MODULE_PROVIDER)
+    private readonly logger: Logger,
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
     private readonly quotaService: QuotaService,
@@ -55,11 +63,25 @@ export class ChatService {
    * 处理聊天请求
    */
   async chat(userId: string, dto: ChatDto, res: Response) {
+    // sse 初始化
     const sse = new SSEUtils(res);
+    // 超时处理
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let handleConnectionClose: (() => void) | null = null;
+    // 耗时统计
+    const startedAt = Date.now();
 
     try {
+      this.logger.info('AI对话开始', {
+        userId,
+        conversationId: dto.conversationId || null,
+        model: dto.model || null,
+        messageCount: dto.messages.length,
+        fileCount: dto.fileIds?.length || 0,
+      });
+      // 用户输入安全检查
       this.safetyService.assertSafeInput(dto.messages);
-
+      // 配额检查
       await this.quotaService.checkQuota(userId);
 
       const conversation = await this.getOrCreateConversation(userId, dto);
@@ -67,6 +89,7 @@ export class ChatService {
         dto.model || conversation.modelId,
       );
       const hasFiles = Boolean(dto.fileIds?.length);
+      const requestedFileCount = dto.fileIds?.length || 0;
       const requestedCapabilities = this.normalizeCapabilities(
         dto.capabilities,
       );
@@ -75,6 +98,15 @@ export class ChatService {
         requestedCapabilities,
         hasFiles,
       );
+      this.logger.info('AI能力校验', {
+        userId,
+        conversationId: conversation.id,
+        model: selectedModel.modelKey,
+        hasFiles,
+        requestedFileCount,
+        requested: requestedCapabilities,
+        effectiveCapabilities,
+      });
 
       if (!effectiveCapabilities.stream) {
         throw new BusinessException(
@@ -100,14 +132,28 @@ export class ChatService {
       await this.syncConversationModel(conversation.id, selectedModel.modelKey);
 
       let webSearchResults: WebSearchItem[] = [];
+      let searchTrace: WebSearchTrace = {
+        query: '',
+        provider: 'none',
+        results: [],
+      };
       let searchQuery = '';
       if (effectiveCapabilities.webSearch) {
         searchQuery = this.getLatestUserQuestion(dto.messages);
         if (searchQuery) {
-          webSearchResults = await this.searchService.search(searchQuery);
+          searchTrace = await this.searchService.searchWithTrace(searchQuery);
+          webSearchResults = searchTrace.results;
         }
       }
-
+      this.logger.info('AI联网搜索', {
+        userId,
+        conversationId: conversation.id,
+        enabled: effectiveCapabilities.webSearch && Boolean(searchQuery),
+        query: searchQuery,
+        provider: searchTrace.provider,
+        resultCount: webSearchResults.length,
+      });
+      
       sse.sendMeta({
         conversationId: conversation.id,
         model: selectedModel.modelKey,
@@ -124,6 +170,8 @@ export class ChatService {
         console.error('Save User Message Error:', err),
       );
 
+      const webSearchContext =
+        this.searchService.buildContext(webSearchResults);
       const langChainMessages = await this.promptService.buildMessages(
         userId,
         dto.messages,
@@ -131,34 +179,89 @@ export class ChatService {
         {
           reasoningEnabled: effectiveCapabilities.reasoning,
           webSearchEnabled: effectiveCapabilities.webSearch,
-          webSearchContext: this.searchService.buildContext(webSearchResults),
+          webSearchContext,
         },
       );
-
+      this.logger.info('AI上下文准备', {
+        userId,
+        conversationId: conversation.id,
+        hasFiles,
+        fileCount: requestedFileCount,
+        webSearch: effectiveCapabilities.webSearch,
+        webSearchResultCount: webSearchResults.length,
+        webSearchContextLength: webSearchContext.length,
+      });
+      this.logger.info('AIChat.CallOverview', {
+        userId,
+        conversationId: conversation.id,
+        ai对话: {
+          model: selectedModel.modelKey,
+          reasoningEnabled: effectiveCapabilities.reasoning,
+        },
+        本次调用搜索: {
+          enabled: effectiveCapabilities.webSearch && Boolean(searchQuery),
+          搜索内容: searchQuery,
+          搜索方法: searchTrace.provider,
+          方法回复: this.buildSearchResultSummary(webSearchResults),
+        },
+        本次参考上下文: this.buildContextSummary(
+          webSearchContext,
+          webSearchResults,
+        ),
+        本次使用文件: {
+          hasFiles,
+          fileCount: requestedFileCount,
+          fileIds: dto.fileIds || [],
+        },
+      });
       const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 60000);
+      timeoutId = setTimeout(() => abortController.abort(), 60000);
+      handleConnectionClose = () => abortController.abort();
+      res.on('close', handleConnectionClose);
 
       const reasoningParamKey =
         typeof selectedModel.configJson?.reasoningParamKey === 'string'
           ? selectedModel.configJson.reasoningParamKey
           : undefined;
+      this.logger.info('AI推理配置', {
+        userId,
+        conversationId: conversation.id,
+        reasoningEnabled: effectiveCapabilities.reasoning,
+        reasoningParamKey: reasoningParamKey || null,
+      });
 
       const stream = await this.aiService.streamChat(langChainMessages, {
         modelName: selectedModel.modelKey,
         reasoningEnabled: effectiveCapabilities.reasoning,
         reasoningParamKey,
+        signal: abortController.signal,
+      });
+      this.logger.info('AI流式开始', {
+        userId,
+        conversationId: conversation.id,
+        model: selectedModel.modelKey,
       });
 
-      clearTimeout(timeoutId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
 
       let fullContent = '';
       let fullReasoning = '';
       let outputTokens = 0;
       let providerUsagePayload: unknown;
       let outputBlocked = false;
+      let chunkCount = 0;
+      let reasoningChunkCount = 0;
+      let contentChunkCount = 0;
 
       for await (const chunk of stream) {
+        if (res.writableEnded) {
+          break;
+        }
         outputTokens += 1;
+        chunkCount += 1;
         providerUsagePayload =
           (chunk.response_metadata as unknown) ??
           (chunk.additional_kwargs as unknown) ??
@@ -169,6 +272,7 @@ export class ChatService {
 
         if (reasoning && effectiveCapabilities.reasoning) {
           fullReasoning += reasoning;
+          reasoningChunkCount += 1;
           sse.sendThinking(reasoning);
         }
 
@@ -176,6 +280,7 @@ export class ChatService {
           const contentStr = chunk.content as string;
           const filtered = this.safetyService.filterOutputChunk(contentStr);
           fullContent += filtered.safeText;
+          contentChunkCount += 1;
           sse.sendContent(filtered.safeText);
           if (filtered.blocked) {
             outputBlocked = true;
@@ -195,20 +300,68 @@ export class ChatService {
         outputTokens,
         selectedModel.modelKey,
         providerUsagePayload,
-      ).catch((err) => console.error('Post Chat Error:', err));
+        {
+          searchEnabled:
+            effectiveCapabilities.webSearch && Boolean(searchQuery),
+          searchQuery,
+          searchProvider: searchTrace.provider,
+          searchSummary: this.buildSearchResultSummary(webSearchResults),
+          contextSummary: this.buildContextSummary(
+            webSearchContext,
+            webSearchResults,
+          ),
+          hasFiles,
+          fileCount: requestedFileCount,
+          fileIds: dto.fileIds || [],
+        },
+      ).catch((err: unknown) =>
+        this.logger.error('AIChat.PostProcessFailed', {
+          userId,
+          conversationId: conversation.id,
+          error:
+            err instanceof Error
+              ? { message: err.message, stack: err.stack }
+              : err,
+        }),
+      );
 
       if (outputBlocked) {
-        console.warn('Output blocked by safety policy', {
+        this.logger.warn('AI输出被安全策略拦截', {
+          userId,
           conversationId: conversation.id,
         });
       }
-    } catch (error) {
-      console.error('Chat Error:', error);
+      this.logger.info('AI对话完成', {
+        userId,
+        conversationId: conversation.id,
+        model: selectedModel.modelKey,
+        chunkCount,
+        contentChunkCount,
+        reasoningChunkCount,
+        reasoningObserved: fullReasoning.length > 0,
+        outputTokens,
+        contentLength: fullContent.length,
+        reasoningLength: fullReasoning.length,
+        elapsedMs: Date.now() - startedAt,
+      });
+    } catch (error: unknown) {
+      this.logger.error('AI对话失败', {
+        userId,
+        conversationId: dto.conversationId || null,
+        error: this.serializeError(error),
+      });
       const message =
         error instanceof Error && error.message
           ? error.message
           : 'Unknown error';
       sse.sendError(message);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (handleConnectionClose) {
+        res.off('close', handleConnectionClose);
+      }
     }
   }
 
@@ -407,6 +560,16 @@ export class ChatService {
     outputTokens: number,
     modelKey: string,
     providerUsagePayload?: unknown,
+    runtimeSummary?: {
+      searchEnabled: boolean;
+      searchQuery: string;
+      searchProvider: 'tavily' | 'duckduckgo' | 'none';
+      searchSummary: string;
+      contextSummary: string;
+      hasFiles: boolean;
+      fileCount: number;
+      fileIds: string[];
+    },
   ) {
     if (!content && !reasoning) return;
 
@@ -445,5 +608,72 @@ export class ChatService {
     );
 
     await this.quotaService.recordUsage(userId, usage.totalTokens);
+    this.logger.info('AIChat.PostProcessCompleted', {
+      userId,
+      conversationId,
+      model: modelKey,
+      totalTokens: usage.totalTokens,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      cost: usage.cost,
+      estimated: usage.estimated,
+    });
+    this.logger.info('AIChat.CallSummary', {
+      userId,
+      conversationId,
+      ai对话: modelKey,
+      本次调用搜索: {
+        enabled: runtimeSummary?.searchEnabled ?? false,
+        搜索内容: runtimeSummary?.searchQuery ?? '',
+        搜索方法: runtimeSummary?.searchProvider ?? 'none',
+        方法回复: runtimeSummary?.searchSummary ?? '',
+      },
+      本次参考上下文: runtimeSummary?.contextSummary ?? '',
+      本次使用文件: {
+        hasFiles: runtimeSummary?.hasFiles ?? false,
+        fileCount: runtimeSummary?.fileCount ?? 0,
+        fileIds: runtimeSummary?.fileIds ?? [],
+      },
+      本次消耗计费: {
+        totalTokens: usage.totalTokens,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        cost: usage.cost,
+        currency: usage.costCurrency,
+        estimated: usage.estimated,
+      },
+    });
+  }
+
+  private buildSearchResultSummary(items: WebSearchItem[]): string {
+    if (items.length === 0) {
+      return '搜索无结果';
+    }
+    return items
+      .slice(0, 3)
+      .map((item, index) => `${index + 1}.${item.title}`)
+      .join(' | ');
+  }
+
+  private buildContextSummary(
+    webSearchContext: string,
+    webSearchResults: WebSearchItem[],
+  ): string {
+    if (!webSearchContext) {
+      return '无参考上下文';
+    }
+    return `联网上下文长度=${webSearchContext.length}, 引用条数=${webSearchResults.length}`;
+  }
+
+  private serializeError(error: unknown) {
+    if (error instanceof Error) {
+      return {
+        message: error.message,
+        stack: error.stack,
+      };
+    }
+    return {
+      message: String(error),
+    };
   }
 }

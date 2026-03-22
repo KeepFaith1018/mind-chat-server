@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   AIMessage,
   HumanMessage,
   SystemMessage,
   BaseMessage,
 } from '@langchain/core/messages';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ChatMessageDto } from '../dto/chat.dto';
 
@@ -16,7 +18,11 @@ interface BuildMessageOptions {
 
 @Injectable()
 export class PromptService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(WINSTON_MODULE_PROVIDER)
+    private readonly logger: Logger,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * 构建 LangChain 消息列表
@@ -30,6 +36,16 @@ export class PromptService {
   ): Promise<BaseMessage[]> {
     const fileContext = await this.buildFileContext(userId, fileIds);
     const webSearchContext = options?.webSearchContext || '';
+    this.logger.info('AIPrompt.ContextLoaded', {
+      userId,
+      fileRequestedCount: fileIds?.length || 0,
+      hasFileContext: Boolean(fileContext),
+      fileContextLength: fileContext.length,
+      webSearchEnabled: Boolean(options?.webSearchEnabled),
+      hasWebSearchContext: Boolean(webSearchContext),
+      webSearchContextLength: webSearchContext.length,
+      reasoningEnabled: Boolean(options?.reasoningEnabled),
+    });
 
     // 2. 截断历史消息 (保留最近 20 条，避免 Token 溢出)
     // 假设 messages 是前端传来的全量历史，或者我们从数据库加载
@@ -89,7 +105,22 @@ export class PromptService {
       langChainMessages.unshift(
         new SystemMessage('如果缺少足够信息，请明确说明并给出保守结论。'),
       );
+      if (!webSearchContext) {
+        langChainMessages.unshift(
+          new SystemMessage(
+            '本轮联网检索未返回可用结果。对于“最新/实时/时效性”问题，不要使用不确定的历史记忆作事实结论，请明确说明无法获取实时信息。',
+          ),
+        );
+      }
     }
+
+    this.logger.info('AIPrompt.Built', {
+      userId,
+      recentMessageCount: recentMessages.length,
+      outputMessageCount: langChainMessages.length,
+      hasInjectedFileContext: Boolean(fileContext),
+      hasInjectedWebSearchContext: Boolean(webSearchContext),
+    });
 
     return langChainMessages;
   }
@@ -104,7 +135,25 @@ export class PromptService {
       },
     });
 
-    if (files.length === 0) return '';
+    if (files.length === 0) {
+      this.logger.info('AIPrompt.FileUsage', {
+        userId,
+        requestedFileIds: fileIds,
+        usedFileCount: 0,
+        usedFiles: [],
+      });
+      return '';
+    }
+
+    this.logger.info('AIPrompt.FileUsage', {
+      userId,
+      requestedFileIds: fileIds,
+      usedFileCount: files.length,
+      usedFiles: files.slice(0, 5).map((file) => ({
+        id: file.id,
+        filename: file.filename,
+      })),
+    });
 
     let context = `\n\n=== 参考资料开始 ===\n`;
     files.forEach((f, index) => {

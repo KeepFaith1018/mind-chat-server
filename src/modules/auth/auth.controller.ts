@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
-import { Response, Request } from 'express';
+import { Response, Request, CookieOptions } from 'express';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CurrentUser } from '../../common/decorators/currentUser.decorator';
 import { BusinessException } from '../../common/exception/businessException';
@@ -50,14 +50,24 @@ export class AuthController {
       throw new BusinessException(ErrorCode.NOT_FOUND);
     }
 
-    const data = await this.oauthService.login(provider, code, state);
-
-    this.setCookies(res, data.accessToken, data.refreshToken);
     const frontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const redirectUrl = data.redirectUrl || '/';
-    const finalUrl = this.toFrontendUrl(frontendUrl, redirectUrl);
-    res.redirect(finalUrl);
+
+    try {
+      const data = await this.oauthService.login(provider, code, state);
+      this.setCookies(res, data.accessToken, data.refreshToken);
+      const redirectUrl = data.redirectUrl || '/';
+      const finalUrl = this.toFrontendAuthCallbackUrl(frontendUrl, {
+        redirectPath: redirectUrl,
+      });
+      res.redirect(finalUrl);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'OAuth 登录失败';
+      const finalUrl = this.toFrontendAuthCallbackUrl(frontendUrl, {
+        errorMessage: message,
+      });
+      res.redirect(finalUrl);
+    }
   }
 
   @Post('register')
@@ -115,24 +125,62 @@ export class AuthController {
   }
 
   private setCookies(res: Response, accessToken: string, refreshToken: string) {
-    res.cookie('token', accessToken, {
+    const sameSite = this.resolveSameSite();
+    const secure = process.env.NODE_ENV === 'production' || sameSite === 'none';
+    const domain = this.configService.get<string>('COOKIE_DOMAIN')?.trim();
+    const baseOptions: CookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure,
+      sameSite,
+    };
+    if (domain) {
+      baseOptions.domain = domain;
+    }
+
+    res.cookie('token', accessToken, {
+      ...baseOptions,
       maxAge: 15 * 60 * 1000, // 15m
     });
 
     res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      ...baseOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
     });
   }
 
-  private toFrontendUrl(frontendUrl: string, redirectPath: string): string {
+  private toFrontendAuthCallbackUrl(
+    frontendUrl: string,
+    options: {
+      redirectPath?: string;
+      errorMessage?: string;
+    },
+  ): string {
     try {
-      return new URL(redirectPath, frontendUrl).toString();
+      const callbackUrl = new URL('/auth/callback', frontendUrl);
+      if (options.redirectPath) {
+        callbackUrl.searchParams.set('redirect', options.redirectPath);
+      }
+      if (options.errorMessage) {
+        callbackUrl.searchParams.set('error', options.errorMessage);
+      }
+      return callbackUrl.toString();
     } catch {
       return frontendUrl;
     }
+  }
+
+  private resolveSameSite(): 'lax' | 'strict' | 'none' {
+    const configured = this.configService
+      .get<string>('COOKIE_SAMESITE')
+      ?.toLowerCase()
+      .trim();
+    if (
+      configured === 'strict' ||
+      configured === 'none' ||
+      configured === 'lax'
+    ) {
+      return configured;
+    }
+    return 'lax';
   }
 }

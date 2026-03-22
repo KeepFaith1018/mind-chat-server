@@ -54,7 +54,7 @@ export class QuotaService {
       where: { userId },
       create: {
         userId,
-        dailyTokenLimit: 500000,
+        dailyTokenLimit: 5000,
         dailyTokenUsage: 0,
         totalTokenUsage: 0,
       },

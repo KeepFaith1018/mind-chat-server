@@ -11,6 +11,7 @@ export interface ChatOptions {
   streaming?: boolean;
   reasoningEnabled?: boolean;
   reasoningParamKey?: string;
+  signal?: AbortSignal;
 }
 
 @Injectable()
@@ -52,6 +53,9 @@ export class AiService {
    */
   async streamChat(messages: BaseMessage[], options: ChatOptions = {}) {
     const model = this.createChatModel(options);
+    if (options.signal) {
+      return await model.stream(messages, { signal: options.signal });
+    }
     return await model.stream(messages);
   }
 }

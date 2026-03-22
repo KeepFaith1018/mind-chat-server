@@ -19,9 +19,13 @@ export class SSEUtils {
   }
 
   private init() {
-    this.res.setHeader('Content-Type', 'text/event-stream');
-    this.res.setHeader('Cache-Control', 'no-cache');
+    this.res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    this.res.setHeader('Cache-Control', 'no-cache, no-transform');
     this.res.setHeader('Connection', 'keep-alive');
+    this.res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof this.res.flushHeaders === 'function') {
+      this.res.flushHeaders();
+    }
   }
 
   send(event: SSEEventType, data: any) {
